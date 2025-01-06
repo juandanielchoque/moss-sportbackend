@@ -1,6 +1,8 @@
 // controllers/jugadorController.js
 
 const Jugador = require('../models/Jugador');
+const db = require('../config/db');  // Suponiendo que tienes una conexión a la base de datos configurada
+
 
 const createJugador = async (req, res) => {
   const { nombre, edad, posicion, numero_camiseta, equipo_id } = req.body;
@@ -71,12 +73,38 @@ const deleteJugador = async (req, res) => {
     console.error('Error al eliminar el jugador:', err);
     res.status(500).json({ message: 'Error al eliminar el jugador', error: err.message });
   }
+
 };
+
+// Método para obtener jugadores con su equipo
+const getJugadoresConEquipo = async (req, res) => {
+  try {
+    // Consulta SQL para obtener la información de los jugadores y su equipo
+    const query = `
+      SELECT 
+          j.nombre AS nombre_jugador,
+          j.edad,
+          j.posicion,
+          j.numero_camiseta,
+          e.nombre AS nombre_equipo
+      FROM jugadores j
+      JOIN equipos e ON j.equipo_id = e.id;
+    `;
+    
+    const [rows] = await db.query(query);  // Ejecutar la consulta
+    res.status(200).json(rows);  // Devolver los resultados como JSON
+  } catch (err) {
+    console.error('Error al obtener los jugadores con equipo:', err);
+    res.status(500).json({ message: 'Error al obtener los jugadores con equipo', error: err.message });
+  }
+}
 
 module.exports = {
   createJugador,
   getAllJugadores,
   getJugadorById,
   updateJugador,
-  deleteJugador
+  deleteJugador,
+  getJugadoresConEquipo
+  
 };

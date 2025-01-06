@@ -78,3 +78,81 @@ exports.actualizarTorneo = async (req, res) => {
       res.status(500).json({ message: 'Error al actualizar el torneo', error: error.message });
     }
   };
+
+//-------
+
+exports.obtenerEstadisticas = async (req, res) => {
+  try {
+    const [totalTorneos] = await db.query('SELECT COUNT(*) AS total_torneos FROM torneos');
+    console.log('Total de torneos:', totalTorneos);  // Depuración
+
+    const [torneosPorEstado] = await db.query(`
+      SELECT estado, COUNT(*) AS cantidad
+      FROM torneos
+      GROUP BY estado
+    `);
+    console.log('Torneos por estado:', torneosPorEstado);  // Depuración
+
+    const [torneosPorTipo] = await db.query(`
+      SELECT tipo, COUNT(*) AS cantidad
+      FROM torneos
+      GROUP BY tipo
+    `);
+    console.log('Torneos por tipo:', torneosPorTipo);  // Depuración
+
+    const [torneosFuturos] = await db.query(`
+      SELECT COUNT(*) AS cantidad
+      FROM torneos
+      WHERE fecha_inicio > NOW()
+    `);
+    console.log('Torneos futuros:', torneosFuturos);  // Depuración
+
+    res.status(200).json({
+      totalTorneos: totalTorneos[0].total_torneos,
+      torneosPorEstado: torneosPorEstado,
+      torneosPorTipo: torneosPorTipo,
+      torneosFuturos: torneosFuturos[0].cantidad,
+    });
+  } catch (error) {
+    console.log('Error al obtener estadísticas:', error.message);  // Depuración
+    res.status(500).json({ message: 'Error al obtener estadísticas', error: error.message });
+  }
+};
+
+
+//------------------
+exports.getTablaPosiciones = async (req, res) => {
+  const { torneoId } = req.params;
+
+  try {
+      const query = `
+          SELECT 
+              e.nombre AS equipo,
+              COUNT(p.id) AS PJ,
+              SUM(CASE WHEN (p.goles_local > p.goles_visitante AND p.equipo_local_id = e.id) OR 
+                       (p.goles_visitante > p.goles_local AND p.equipo_visitante_id = e.id) THEN 1 ELSE 0 END) AS G,
+              SUM(CASE WHEN p.goles_local = p.goles_visitante THEN 1 ELSE 0 END) AS E,
+              SUM(CASE WHEN (p.goles_local < p.goles_visitante AND p.equipo_local_id = e.id) OR 
+                       (p.goles_visitante < p.goles_local AND p.equipo_visitante_id = e.id) THEN 1 ELSE 0 END) AS P,
+              SUM(CASE WHEN p.equipo_local_id = e.id THEN p.goles_local ELSE p.goles_visitante END) AS GF,
+              SUM(CASE WHEN p.equipo_local_id = e.id THEN p.goles_visitante ELSE p.goles_local END) AS GC,
+              SUM(CASE WHEN p.equipo_local_id = e.id THEN p.goles_local ELSE p.goles_visitante END) -
+              SUM(CASE WHEN p.equipo_local_id = e.id THEN p.goles_visitante ELSE p.goles_local END) AS DG,
+              (SUM(CASE WHEN (p.goles_local > p.goles_visitante AND p.equipo_local_id = e.id) OR 
+                         (p.goles_visitante > p.goles_local AND p.equipo_visitante_id = e.id) THEN 1 ELSE 0 END) * 3) +
+              (SUM(CASE WHEN p.goles_local = p.goles_visitante THEN 1 ELSE 0 END)) AS Pts
+          FROM equipos e
+          LEFT JOIN partidos p ON e.id = p.equipo_local_id OR e.id = p.equipo_visitante_id
+          WHERE e.torneo_id = ?
+          GROUP BY e.id, e.nombre
+          ORDER BY Pts DESC, DG DESC, GF DESC;
+      `;
+
+      const [rows] = await db.query(query, [torneoId]);
+      res.status(200).json(rows);
+  } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error al obtener la tabla de posiciones' });
+  }
+};
+

@@ -2,6 +2,20 @@
 
 const Partido = require('../models/Partido');
 
+//fecha
+const mysqlDateFormat = (isoDate) => {
+  const date = new Date(isoDate);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0'); // Mes empieza en 0
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mi = String(date.getMinutes()).padStart(2, '0');
+  const ss = String(date.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+};
+
+
+
 const createPartido = async (req, res) => {
   const { torneo_id, equipo_local_id, equipo_visitante_id, fecha_hora, lugar, estado, goles_local, goles_visitante, arbitro } = req.body;
   
@@ -42,20 +56,33 @@ const getPartidoById = async (req, res) => {
 
 const updatePartido = async (req, res) => {
   const { id } = req.params;
-  const { goles_local, goles_visitante, estado } = req.body;
-  
+  const updatedFields = req.body;
+
+  // Convierte el campo fecha_hora si existe
+  if (updatedFields.fecha_hora) {
+    updatedFields.fecha_hora = mysqlDateFormat(updatedFields.fecha_hora);
+  }
+
   try {
-    const partidoActualizado = await Partido.update(id, { goles_local, goles_visitante, estado });
+    const partidoActualizado = await Partido.update(Number(id), updatedFields);
     if (partidoActualizado) {
-      res.status(200).json(partidoActualizado);
+      res.status(200).json({
+        message: 'Partido actualizado exitosamente.',
+        partido: partidoActualizado,
+      });
     } else {
-      res.status(404).json({ message: 'Partido no encontrado' });
+      res.status(404).json({ message: 'Partido no encontrado.' });
     }
   } catch (err) {
-    console.error('Error al actualizar el partido:', err);
-    res.status(500).json({ message: 'Error al actualizar el partido', error: err.message });
+    console.error('Error al actualizar el partido:', err.message);
+    res.status(500).json({ 
+      message: 'Error al actualizar el partido.',
+      error: err.message 
+    });
   }
 };
+
+
 
 const deletePartido = async (req, res) => {
   const { id } = req.params;

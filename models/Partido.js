@@ -34,20 +34,38 @@ const Partido = {
     }
   },
   
-  update: async (id, { goles_local, goles_visitante, estado }) => {
+  update: async (id, updatedFields) => {
     try {
-      const [result] = await db.query(
-        'UPDATE partidos SET goles_local = ?, goles_visitante = ?, estado = ? WHERE id = ?',
-        [goles_local, goles_visitante, estado, id]
-      );
-      if (result.affectedRows > 0) {
-        return { id, goles_local, goles_visitante, estado };
-      }
-      return null;  // Retorna null si no se actualizó ningún partido
+        if (!id || typeof id !== 'number') {
+            throw new Error('El ID del partido es obligatorio y debe ser un número.');
+        }
+
+        if (!updatedFields || typeof updatedFields !== 'object' || Object.keys(updatedFields).length === 0) {
+            throw new Error('Debes proporcionar al menos un campo para actualizar.');
+        }
+
+        // Construcción dinámica de la consulta
+        const keys = Object.keys(updatedFields);
+        const values = Object.values(updatedFields);
+
+        const setClause = keys.map((key) => `${key} = ?`).join(', ');
+        const query = `UPDATE partidos SET ${setClause} WHERE id = ?`;
+
+        // Ejecuta la consulta con los valores y el ID
+        const [result] = await db.query(query, [...values, id]);
+
+        if (result.affectedRows === 0) {
+            throw new Error(`No se encontró un partido con el ID ${id} para actualizar.`);
+        }
+
+        // Retorna los campos actualizados
+        return { id, ...updatedFields };
     } catch (err) {
-      throw new Error('Error al actualizar el partido: ' + err.message);
+        console.error(`Error al actualizar el partido con ID ${id}:`, err.message);
+        throw new Error('Error al actualizar el partido: ' + err.message);
     }
-  },
+},
+
 
   delete: async (id) => {
     try {

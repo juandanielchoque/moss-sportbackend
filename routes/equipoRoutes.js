@@ -7,6 +7,8 @@ router.post('/equipos', equipoController.createEquipo);
 
 // Obtener todos los equipos
 router.get('/equipos', equipoController.getAllEquipos);
+router.get('/equipos/detalles', equipoController.getEquiposDetails);
+
 
 // Obtener un equipo por ID
 router.get('/equipos/:id', equipoController.getEquipoById);
@@ -16,5 +18,7 @@ router.put('/equipos/:id', equipoController.updateEquipo);
 
 // Eliminar un equipo
 router.delete('/equipos/:id', equipoController.deleteEquipo);
+
+
 
 module.exports = router;

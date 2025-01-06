@@ -74,7 +74,25 @@ const Equipo = {
       console.error('Error al eliminar el equipo:', err);
       throw new Error('Error al eliminar el equipo');
     }
-  }
+  },
+
+  getAllDetails: async () => {
+    const query = `
+      SELECT 
+        equipos.id AS equipo_id, 
+        equipos.nombre AS nombre_equipo, 
+        torneos.nombre AS nombre_torneo, 
+        usuarios.nombre AS nombre_capitan
+      FROM 
+        equipos
+      LEFT JOIN 
+        torneos ON equipos.torneo_id = torneos.id
+      LEFT JOIN 
+        usuarios ON equipos.capitan_id = usuarios.id;
+    `;
+    const [result] = await db.execute(query);
+    return result;
+  },
 };
 
 module.exports = Equipo;
