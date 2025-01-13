@@ -12,6 +12,8 @@ const authRoutes = require('./routes/authRoutes');
 const authMiddleware = require('./utils/authMiddleware');
 const roleMiddleware = require('./utils/roleMiddleware');
 const torneoController = require('./controllers/torneoController');
+const categoriaRoutes = require('./routes/categoriaRoutes');
+
 
 
 app.use(cors());
@@ -23,6 +25,7 @@ app.use('/api', equipoRoutes);
 app.use('/api/partidos', partidoRoutes);
 app.use('/api/jugadores', jugadorRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/categorias', categoriaRoutes);  
 
 app.listen(5000, () => {
     console.log('Servidor iniciado en http://localhost:5000');

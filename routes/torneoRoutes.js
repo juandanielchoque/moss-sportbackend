@@ -8,6 +8,10 @@ const roleMiddleware = require('../utils/roleMiddleware');
 // Ruta para crear un nuevo torneo (solo administradores)
 router.post('/', authMiddleware, roleMiddleware(['administrador']), torneoController.crearTorneo);
 
+// Ruta para agregar categorías a un torneo existente (recomendación para una ruta más limpia)
+router.post('/:id/categorias', authMiddleware, roleMiddleware(['administrador']), torneoController.agregarCategorias);
+
+
 // Rutas PUT
 // Ruta para actualizar un torneo (solo administradores y con restricciones)
 router.put('/:id', authMiddleware, roleMiddleware(['administrador']), torneoController.actualizarTorneo);
@@ -24,8 +28,6 @@ router.get('/estadisticas', torneoController.obtenerEstadisticas);
 router.get('/', torneoController.obtenerTorneos);
 router.get('/:id', torneoController.obtenerTorneoPorId);
 
-// Ruta para obtener la tabla de posiciones de un torneo
-router.get('/:torneoId/posiciones', torneoController.getTablaPosiciones);
-// Nueva ruta para obtener equipos con capitán y torneo
+
 
 module.exports = router;
