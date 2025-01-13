@@ -17,16 +17,28 @@ const mysqlDateFormat = (isoDate) => {
 
 
 const createPartido = async (req, res) => {
-  const { torneo_id, equipo_local_id, equipo_visitante_id, fecha_hora, lugar, estado, goles_local, goles_visitante, arbitro } = req.body;
+  const { torneo_id, equipo_local_id, equipo_visitante_id, fecha_hora, lugar, estado, goles_local, goles_visitante, arbitro, categoria_id } = req.body;
   
   try {
+    // Crear el partido
     const partido = await Partido.create({ torneo_id, equipo_local_id, equipo_visitante_id, fecha_hora, lugar, estado, goles_local, goles_visitante, arbitro });
+
+    // Asegurarse de que el partido se asocie solo a la categoría seleccionada
+    await db.query(
+      `INSERT INTO torneo_categorias (torneo_id, categoria_id) 
+       VALUES (?, ?) 
+       ON DUPLICATE KEY UPDATE categoria_id = categoria_id`, 
+      [torneo_id, categoria_id]
+    );
+
+    // Retornar el partido creado
     res.status(201).json(partido);
   } catch (err) {
     console.error('Error al crear el partido:', err);
     res.status(500).json({ message: 'Error al crear el partido', error: err.message });
   }
 };
+
 
 const getAllPartidos = async (req, res) => {
   try {
