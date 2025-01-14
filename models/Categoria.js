@@ -33,14 +33,14 @@ const getAllCategorias = async () => {
 };
 
 // Crear una nueva categoría
-const createCategoria = async (nombre, torneoId) => {
+const createCategoria = async (nombre, torneoId = null) => {
   try {
     const [result] = await db.query(`
       INSERT INTO categorias (nombre)
       VALUES (?)
     `, [nombre]);
 
-    // Si se proporciona un torneoId, asociar la categoría al torneo
+    // Asociar la categoría al torneo solo si se proporciona un torneoId
     if (torneoId) {
       await db.query(`
         INSERT INTO torneo_categorias (categoria_id, torneo_id)

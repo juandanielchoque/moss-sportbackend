@@ -42,8 +42,9 @@ const getAllCategorias = async (req, res) => {
 const createCategoria = async (req, res) => {
   const { nombre, torneoId } = req.body;
 
-  if (!nombre || !torneoId) {
-    return res.status(400).json({ message: 'El nombre y el ID del torneo son obligatorios' });
+  // Validar solo el campo obligatorio "nombre"
+  if (!nombre) {
+    return res.status(400).json({ message: 'El nombre es obligatorio' });
   }
 
   try {

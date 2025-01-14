@@ -1,162 +1,143 @@
-const db = require('../config/db');  // Importar la conexión configurada con promesas
+// controllers/categoriaController.js
 
-const Equipo = {
-  // Obtener todos los equipos
-  getAll: async () => {
-    try {
-      const [rows] = await db.query('SELECT * FROM equipos');  // Eliminamos .promise() ya que está integrado con db
-      return rows;
-    } catch (err) {
-      console.error('Error en la consulta de equipos:', err);
-      throw new Error('Error al obtener los equipos');
-    }
-  },
+const Categoria = require('../models/Categoria');
 
-  // Obtener un equipo por su ID
-  getById: async (id) => {
-    try {
-      const [rows] = await db.query('SELECT * FROM equipos WHERE id = ?', [id]);
-      return rows[0];  // Retornar el primer equipo encontrado
-    } catch (err) {
-      console.error('Error en la consulta del equipo:', err);
-      throw new Error('Error al obtener el equipo');
-    }
-  },
+// Obtener las categorías de un torneo específico
+const getCategoriasByTorneo = async (req, res) => {
+  const { torneoId } = req.params;
 
-  // Verificar si un capitán ya está asignado a un equipo en un torneo
-  getByCapitanAndTorneo: async (capitan_id, torneo_id) => {
-    try {
-      const [rows] = await db.query(
-        'SELECT * FROM equipos WHERE capitan_id = ? AND torneo_id = ?',
-        [capitan_id, torneo_id]
-      );
-      return rows[0];  // Retornar el primer equipo encontrado
-    } catch (err) {
-      console.error('Error en la consulta del capitán y torneo:', err);
-      throw new Error('Error al verificar el capitán y torneo');
-    }
-  },
-
-  // Obtener las categorías disponibles para un torneo
-getCategoriasByTorneo: async (torneoId) => {
-  try {
-    // Hacemos un JOIN con la tabla 'categorias' para obtener el nombre de cada categoría asociada al torneo
-    const [rows] = await db.query(
-      `SELECT c.id AS categoria_id, c.nombre
-       FROM categorias c
-       INNER JOIN torneo_categorias tc ON c.id = tc.categoria_id
-       WHERE tc.torneo_id = ?`,
-      [torneoId]
-    );
-    return rows;  // Devuelve las categorías asociadas al torneo
-  } catch (err) {
-    console.error('Error al obtener las categorías del torneo:', err);
-    throw new Error('Error al obtener las categorías');
+  if (!torneoId) {
+    return res.status(400).json({ message: 'El ID del torneo es obligatorio' });
   }
-},
 
- // Crear un equipo con categoría
- create: async (nombre, email_capitan, nombre_torneo, categoria_id) => {
   try {
-    // Buscar el capitan_id a partir del email
-    const [capitanResult] = await db.query(
-      'SELECT id FROM usuarios WHERE email = ?',
-      [email_capitan]
-    );
-
-    if (capitanResult.length === 0) {
-      throw new Error('Capitán no encontrado');
+    const categorias = await Categoria.getCategoriasByTorneo(torneoId);
+    
+    if (categorias.length === 0) {
+      return res.status(404).json({ message: 'No se encontraron categorías para este torneo.' });
     }
 
-    const capitan_id = capitanResult[0].id;
-
-    // Buscar el torneo_id a partir del nombre del torneo
-    const [torneoResult] = await db.query(
-      'SELECT id FROM torneos WHERE nombre = ?',
-      [nombre_torneo]
-    );
-
-    if (torneoResult.length === 0) {
-      throw new Error('Torneo no encontrado');
-    }
-
-    const torneo_id = torneoResult[0].id;
-
-    // Verificar que la categoría existe para este torneo
-    const [categoria] = await db.query(
-      'SELECT * FROM categorias WHERE id = ? AND torneo_id = ?',
-      [categoria_id, torneo_id]
-    );
-
-    if (!categoria) {
-      throw new Error('La categoría no existe en este torneo');
-    }
-
-    // Crear el equipo (sin incluir categoria_id)
-    const [result] = await db.query(
-      'INSERT INTO equipos (nombre, capitan_id, torneo_id) VALUES (?, ?, ?)',
-      [nombre, capitan_id, torneo_id]
-    );
-
-    const equipoId = result.insertId;
-
-    // Inscribir el equipo en la categoría en la tabla intermedia
-    await db.query(
-      'INSERT INTO equipo_categorias (equipo_id, categoria_id, torneo_id) VALUES (?, ?, ?)',
-      [equipoId, categoria_id, torneo_id]
-    );
-
-    return { id: equipoId, nombre, capitan_id, torneo_id, categoria_id };
-  } catch (err) {
-    console.error('Error al crear el equipo:', err);
-    throw new Error('Error al crear el equipo');
+    res.status(200).json(categorias);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener las categorías', error: error.message });
   }
-},
-
-
-
-  // Actualizar un equipo
-  update: async (id, nombre, capitan_id, torneo_id) => {
-    try {
-      await db.query(
-        'UPDATE equipos SET nombre = ?, capitan_id = ?, torneo_id = ? WHERE id = ?',
-        [nombre, capitan_id, torneo_id, id]
-      );
-      return { id, nombre, capitan_id, torneo_id };
-    } catch (err) {
-      console.error('Error al actualizar el equipo:', err);
-      throw new Error('Error al actualizar el equipo');
-    }
-  },
-
-  // Eliminar un equipo
-  delete: async (id) => {
-    try {
-      await db.query('DELETE FROM equipos WHERE id = ?', [id]);
-      return { id };
-    } catch (err) {
-      console.error('Error al eliminar el equipo:', err);
-      throw new Error('Error al eliminar el equipo');
-    }
-  },
-
-  getAllDetails: async () => {
-    const query = `
-      SELECT 
-        equipos.id AS equipo_id, 
-        equipos.nombre AS nombre_equipo, 
-        torneos.nombre AS nombre_torneo, 
-        usuarios.nombre AS nombre_capitan
-      FROM 
-        equipos
-      LEFT JOIN 
-        torneos ON equipos.torneo_id = torneos.id
-      LEFT JOIN 
-        usuarios ON equipos.capitan_id = usuarios.id;
-    `;
-    const [result] = await db.execute(query);
-    return result;
-  },
 };
 
-module.exports = Equipo;
+// Obtener todas las categorías
+const getAllCategorias = async (req, res) => {
+  try {
+    const categorias = await Categoria.getAllCategorias();
+
+    if (categorias.length === 0) {
+      return res.status(404).json({ message: 'No se encontraron categorías.' });
+    }
+
+    res.status(200).json(categorias);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener las categorías', error: error.message });
+  }
+};
+
+// Crear una nueva categoría
+const createCategoria = async (req, res) => {
+  const { nombre, torneoId } = req.body;
+
+  if (!nombre || !torneoId) {
+    return res.status(400).json({ message: 'El nombre y el ID del torneo son obligatorios' });
+  }
+
+  try {
+    const nuevaCategoria = await Categoria.createCategoria(nombre, torneoId);
+    res.status(201).json(nuevaCategoria);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al crear la categoría', error: error.message });
+  }
+};
+
+// Actualizar una categoría
+const updateCategoria = async (req, res) => {
+  const { id } = req.params;
+  const { nombre } = req.body;
+
+  if (!nombre) {
+    return res.status(400).json({ message: 'El nombre es obligatorio para la actualización' });
+  }
+
+  try {
+    const actualizado = await Categoria.updateCategoria(id, nombre);
+    if (!actualizado) {
+      return res.status(404).json({ message: 'Categoría no encontrada' });
+    }
+    res.status(200).json({ message: 'Categoría actualizada correctamente' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al actualizar la categoría', error: error.message });
+  }
+};
+
+// Eliminar una categoría
+const deleteCategoria = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const eliminado = await Categoria.deleteCategoria(id);
+    if (!eliminado) {
+      return res.status(404).json({ message: 'Categoría no encontrada' });
+    }
+    res.status(200).json({ message: 'Categoría eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar la categoría', error: error.message });
+  }
+};
+
+// Obtener categorías con torneos, equipos y capitanes asociados
+const getCategoriasWithTorneosEquipos = async (req, res) => {
+  try {
+    const categoriasTorneosEquipos = await Categoria.getCategoriasWithTorneosEquipos();
+
+    if (categoriasTorneosEquipos.length === 0) {
+      return res.status(404).json({ message: 'No se encontraron categorías con torneos y equipos asociados.' });
+    }
+
+    res.status(200).json(categoriasTorneosEquipos);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener categorías con torneos y equipos', error: error.message });
+  }
+};
+
+// Obtener categorías con torneos asociados
+const getCategoriasConTorneos = async (req, res) => {
+  try {
+    // Obtener todas las categorías
+    const categorias = await Categoria.getAll();
+
+    // Obtener los torneos únicos asociados a cada categoría
+    const categoriasConTorneos = await Promise.all(categorias.map(async (categoria) => {
+      // Obtener los torneos asociados a la categoría
+      const torneos = await Torneo.getTorneosByCategoria(categoria.id);
+
+      // Filtrar torneos únicos por torneo_id
+      const torneosUnicos = Array.from(new Set(torneos.map(torneo => torneo.torneo_id)))
+        .map(torneo_id => torneos.find(torneo => torneo.torneo_id === torneo_id));
+
+      return {
+        ...categoria,
+        torneos: torneosUnicos,  // Aquí tienes los torneos únicos
+      };
+    }));
+
+    res.status(200).json(categoriasConTorneos);
+  } catch (err) {
+    console.error('Error al obtener las categorías con torneos:', err);
+    res.status(500).json({ message: 'Error al obtener las categorías con torneos', error: err.message });
+  }
+};
+
+module.exports = {
+  getCategoriasByTorneo,
+  getAllCategorias,
+  createCategoria,
+  updateCategoria,
+  deleteCategoria,
+  getCategoriasWithTorneosEquipos,
+  getCategoriasConTorneos,
+};
