@@ -1,178 +1,166 @@
-const Equipo = require('../models/Equipo');
-const Usuario = require('../models/Usuario');
-const Torneo = require('../models/Torneo');
-const Categoria = require('../models/Categoria');
+const db = require('../config/db');
+const fs = require('fs');
 
-const equipoController = {
-  createEquipo: async (req, res) => {
-    const { nombre, email_capitan, torneos } = req.body;
-  
-    try {
-      // Buscar el ID del capitán usando el email
-      const capitan = await Usuario.findByEmail(email_capitan);
-      if (!capitan) {
-        return res.status(404).json({ message: 'Capitán no encontrado' });
-      }
-  
-      // Crear el equipo
-      const equipo = await Equipo.create(nombre, capitan.id);
-  
-      // Asociar el equipo a los torneos
-      for (const { torneo_id, categoria_id } of torneos) {
-        // Verificar si el torneo existe
-        const torneo = await Torneo.getById(torneo_id);
-        if (!torneo) {
-          return res.status(404).json({ message: `Torneo con ID ${torneo_id} no encontrado` });
-        }
-  
-        // Verificar si la categoría es válida para el torneo
-        const categorias = await Categoria.getCategoriasByTorneo(torneo_id);
-        if (!categorias.some((categoria) => categoria.id === categoria_id)) {
-          return res.status(400).json({
-            message: `Categoría con ID ${categoria_id} no encontrada para el torneo con ID ${torneo_id}`,
-          });
-        }
-  
-        // Verificar si el equipo ya está asociado al torneo y categoría
-        const equipoExistente = await Equipo.getByTorneoAndCategoria(equipo.id, torneo_id, categoria_id);
-        if (equipoExistente) {
-          return res.status(400).json({
-            message: `El equipo ya está asociado al torneo con ID ${torneo_id} y la categoría con ID ${categoria_id}`,
-          });
-        }
-  
-        // Insertar solo en la categoría seleccionada
-        await Equipo.addToTorneo(equipo.id, torneo_id, categoria_id);
-      }
-  
-      res.status(201).json({ message: 'Equipo creado y asociado correctamente', equipo });
-    } catch (err) {
-      console.error('Error al crear el equipo:', err);
-      res.status(500).json({ message: 'Error al crear el equipo', error: err.message });
-    }
-  },
-  
-
-
-
-
-  // Obtener todos los equipos
-  getAllEquipos: async (req, res) => {
-    try {
-      const equipos = await Equipo.getAll();
-      res.status(200).json(equipos);
-    } catch (err) {
-      console.error('Error al obtener los equipos:', err);
-      res.status(500).json({ message: 'Error al obtener los equipos', error: err.message });
-    }
-  },
-
-
-  // Obtener un equipo por ID
-  getEquipoById: async (req, res) => {
-    const { id } = req.params;
-    try {
-      const equipo = await Equipo.getById(id);
-      if (!equipo) {
-        return res.status(404).json({ message: 'Equipo no encontrado' });
-      }
-      res.status(200).json(equipo);
-    } catch (err) {
-      console.error('Error al obtener el equipo:', err);
-      res.status(500).json({ message: 'Error al obtener el equipo', error: err.message });
-    }
-  },
-
-
-  // Editar un equipo
-  editEquipo: async (req, res) => {
-    const { equipo_id, nombre, email_capitan, torneos } = req.body;
-
-    console.log('Datos recibidos:', req.body);  // Verificar el correo del capitán
-
-    try {
-      const equipo = await Equipo.getById(equipo_id);
-      if (!equipo) {
-        return res.status(404).json({ message: 'Equipo no encontrado' });
-      }
-
-      const capitan = await Usuario.findByEmail(email_capitan);
-      if (!capitan) {
-        return res.status(404).json({ message: 'Capitán no encontrado' });
-      }
-
-      await Equipo.updateNombreAndCapitan(equipo_id, nombre, email_capitan);
-
-      await Equipo.removeAllFromTorneo(equipo_id);
-
-      for (const { torneo_id, categoria_id } of torneos) {
-        const torneo = await Torneo.getById(torneo_id);
-        if (!torneo) {
-          return res.status(404).json({ message: `Torneo con ID ${torneo_id} no encontrado` });
-        }
-
-        const categorias = await Categoria.getCategoriasByTorneo(torneo_id);
-        if (!categorias.some(c => c.id === categoria_id)) {
-          return res.status(400).json({ message: `Categoría con ID ${categoria_id} no encontrada para el torneo ${torneo_id}` });
-        }
-
-        await Equipo.addToTorneo(equipo_id, torneo_id, categoria_id);
-      }
-
-      res.status(200).json({ message: 'Equipo actualizado correctamente' });
-    } catch (err) {
-      console.error('Error al actualizar el equipo:', err);
-      res.status(500).json({ message: 'Error al actualizar el equipo', error: err.message });
-    }
-  },
-
-
-  // Eliminar un equipo
-  deleteEquipo: async (req, res) => {
-    const { id } = req.params;
-
-
-    try {
-      const equipoEliminado = await Equipo.delete(id);
-      res.status(200).json({ message: 'Equipo eliminado', equipo: equipoEliminado });
-    } catch (err) {
-      console.error('Error al eliminar el equipo:', err);
-      res.status(500).json({ message: 'Error al eliminar el equipo', error: err.message });
-    }
-  },
-
-   // Obtener detalles del equipo con el torneo y capitán
-   getEquiposDetails: async (req, res) => {
+// Obtener todos los equipos
+exports.obtenerEquipos = async (req, res) => {
   try {
-    const equiposDetalles = await Equipo.getAllDetails();  // Aquí debes usar getAllDetails
-    res.status(200).json(equiposDetalles);
-  } catch (err) {
-    console.error('Error al obtener los detalles de los equipos:', err);
-    res.status(500).json({ message: 'Error al obtener los detalles de los equipos', error: err.message });
-  }
-  },
+    const [equipos] = await db.query(`
+      SELECT e.*, 
+             u.nombre AS capitan_nombre, 
+             u.email AS capitan_correo, 
+             t.nombre AS torneo_nombre, 
+             c.nombre AS categoria_nombre
+      FROM equipos e
+      LEFT JOIN usuarios u ON e.capitan_id = u.id
+      LEFT JOIN torneos t ON e.torneo_id = t.id
+      LEFT JOIN categorias c ON e.categoria_id = c.id
+    `);
 
-  // Obtener equipos asociados a un torneo y categoría específicos
-  obtenerEquipos: async (req, res) => {
-    const { torneo_id, categoria_id } = req.params;
+    const equiposConLogo = equipos.map(equipo => ({
+      ...equipo,
+      logo: equipo.logo ? equipo.logo.toString('base64') : null
+    }));
 
-    try {
-      // Obtener los equipos asociados a ese torneo y categoría
-      const equipos = await Equipo.getEquiposByTorneoYCategoria(torneo_id, categoria_id);
-
-      // Si no se encuentran equipos, devolver un mensaje apropiado
-      if (equipos.length === 0) {
-        return res.status(404).json({ message: 'No se encontraron equipos en esta categoría para el torneo especificado.' });
-      }
-
-      // Devolver la lista de equipos
-      res.status(200).json(equipos);
-    } catch (err) {
-      console.error('Error al obtener los equipos:', err);
-      res.status(500).json({ message: 'Error al obtener los equipos', error: err.message });
-    }
+    res.json({ 
+      success: true, 
+      data: equiposConLogo 
+    });
+  } catch (error) {
+    console.error('Error al obtener equipos:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al obtener los equipos.',
+      error: error.message 
+    }); 
   }
 };
 
+// Crear un nuevo equipo
+exports.crearEquipo = async (req, res) => {
+  const { nombre, capitan_id, torneo_id, categoria_id, logo } = req.body;
 
-module.exports = equipoController;
+  // Validar campos obligatorios
+  if (!nombre || !capitan_id || !torneo_id || !categoria_id) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Todos los campos son obligatorios.' 
+    });
+  }
+
+  try {
+    // Verificar si el capitán existe
+    const [capitanResult] = await db.query(
+      'SELECT id FROM usuarios WHERE id = ?', 
+      [capitan_id]
+    );
+
+    if (capitanResult.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Capitán no encontrado.' 
+      });
+    }
+
+    let logoBuffer = null;
+    if (logo) {
+      // Convertir el string Base64 a Buffer para almacenar en MEDIUMBLOB
+      logoBuffer = Buffer.from(logo, 'base64');
+    }
+
+    // Insertar en la base de datos
+    const [result] = await db.query(
+      'INSERT INTO equipos (nombre, capitan_id, logo, torneo_id, categoria_id) VALUES (?, ?, ?, ?, ?)',
+      [nombre, capitan_id, logoBuffer, torneo_id, categoria_id]
+    );
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Equipo creado exitosamente.',
+      data: { 
+        id: result.insertId, 
+        nombre, 
+        capitan_id,
+        torneo_id, 
+        categoria_id 
+      } 
+    });
+  } catch (error) {
+    console.error('Error al crear el equipo:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al crear el equipo.', 
+      error: error.message 
+    });
+  }
+};
+
+// Actualizar un equipo
+exports.actualizarEquipo = async (req, res) => {
+  const { id } = req.params;
+  const { nombre, capitan_correo, logo, torneo_id, categoria_id } = req.body;
+
+  if (!nombre || !capitan_correo || !torneo_id || !categoria_id) {
+    return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios.' });
+  }
+
+  try {
+    // Obtener el ID del capitán basado en su correo electrónico
+    const [capitanResult] = await db.query('SELECT id FROM usuarios WHERE email = ?', [capitan_correo]);
+    if (capitanResult.length === 0) {
+      return res.status(404).json({ success: false, message: 'Capitán no encontrado.' });
+    }
+    const capitan_id = capitanResult[0].id;
+
+    await db.query('UPDATE equipos SET nombre = ?, capitan_id = ?, logo = ?, torneo_id = ?, categoria_id = ? WHERE id = ?', [nombre, capitan_id, logo, torneo_id, categoria_id, id]);
+    res.status(200).json({ success: true, message: 'Equipo actualizado exitosamente.' });
+  } catch (error) {
+    console.error('Error al actualizar el equipo:', error);
+    res.status(500).json({ success: false, message: 'Error al actualizar el equipo.', error: error.message });
+  }
+};
+
+// Eliminar un equipo
+exports.eliminarEquipo = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Paso 1: Eliminar evidencias relacionadas con los partidos del equipo
+    await db.query(`
+      DELETE FROM evidencias_partidos
+      WHERE partido_id IN (
+        SELECT id FROM partidos WHERE equipo1_id = ? OR equipo2_id = ?
+      )
+    `, [id, id]);
+
+    // Paso 2: Eliminar partidos relacionados con el equipo
+    await db.query('DELETE FROM partidos WHERE equipo1_id = ? OR equipo2_id = ?', [id, id]);
+
+    // Paso 3: Eliminar el equipo
+    await db.query('DELETE FROM equipos WHERE id = ?', [id]);
+
+    res.status(200).json({ success: true, message: 'Equipo eliminado correctamente junto con sus referencias.' });
+  } catch (error) {
+    console.error('Error al eliminar el equipo:', error);
+    res.status(500).json({ success: false, message: 'Error al eliminar el equipo.', error: error.message });
+  }
+};
+
+// Obtener equipos por categoría
+exports.obtenerEquiposPorCategoria = async (req, res) => {
+  const { categoria_id } = req.query;
+
+  try {
+    const equipos = await db.query(`
+      SELECT e.id, e.nombre, r.puntosGeneral, r.fecha
+      FROM equipos e
+      JOIN resultados_disciplinas r ON e.id = r.equipo_id
+      WHERE r.categoria_id = ?
+    `, [categoria_id]);
+
+    res.status(200).json(equipos);
+  } catch (error) {
+    console.error('Error al obtener equipos por categoría:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener equipos.', error: error.message });
+  }
+};
+

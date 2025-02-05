@@ -1,110 +1,203 @@
-// controllers/jugadorController.js
+const db = require('../config/db'); // Importa la conexión a la base de datos
 
-const Jugador = require('../models/Jugador');
-const db = require('../config/db');  // Suponiendo que tienes una conexión a la base de datos configurada
+// Obtener todos los jugadores o filtrar por equipo_id
+exports.obtenerJugadores = async (req, res) => {
+  const { equipo_id } = req.query;
 
-
-const createJugador = async (req, res) => {
-  const { nombre, edad, posicion, numero_camiseta, equipo_id } = req.body;
-  
   try {
-    const jugador = await Jugador.create({ nombre, edad, posicion, numero_camiseta, equipo_id });
-    res.status(201).json(jugador);
-  } catch (err) {
-    console.error('Error al crear el jugador:', err);
-    res.status(500).json({ message: 'Error al crear el jugador', error: err.message });
-  }
-};
+    let query = 'SELECT * FROM jugadores WHERE estado = "activo"';
+    let params = [];
 
-const getAllJugadores = async (req, res) => {
-  try {
-    const jugadores = await Jugador.getAll();
-    res.status(200).json(jugadores);
-  } catch (err) {
-    console.error('Error al obtener los jugadores:', err);
-    res.status(500).json({ message: 'Error al obtener los jugadores', error: err.message });
-  }
-};
-
-const getJugadorById = async (req, res) => {
-  const { id } = req.params;
-  
-  try {
-    const jugador = await Jugador.getById(id);
-    if (jugador) {
-      res.status(200).json(jugador);
-    } else {
-      res.status(404).json({ message: 'Jugador no encontrado' });
+    if (equipo_id) {
+      query += ' AND equipo_id = ?';
+      params.push(equipo_id);
     }
-  } catch (err) {
-    console.error('Error al obtener el jugador:', err);
-    res.status(500).json({ message: 'Error al obtener el jugador', error: err.message });
+
+    const [jugadores] = await db.query(query, params);
+    res.status(200).json({ success: true, data: jugadores });
+  } catch (error) {
+    console.error('Error al obtener jugadores:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener jugadores.', error: error.message });
   }
 };
 
-const updateJugador = async (req, res) => {
-  const { id } = req.params;
-  const { nombre, edad, posicion, numero_camiseta, equipo_id } = req.body;
-  
+// Agregar un nuevo jugador
+exports.agregarJugador = async (req, res) => {
+  const { 
+    nombre, 
+    apellido, 
+    edad, 
+    equipo_id, 
+    sexo, 
+    dni, 
+    fecha_ingreso = new Date().toISOString().split('T')[0],
+    estado = 'activo'
+  } = req.body;
+
   try {
-    const jugadorActualizado = await Jugador.update(id, { nombre, edad, posicion, numero_camiseta, equipo_id });
-    if (jugadorActualizado) {
-      res.status(200).json(jugadorActualizado);
-    } else {
-      res.status(404).json({ message: 'Jugador no encontrado' });
+    // Verificar si ya existe un jugador con el mismo DNI
+    const [existingPlayer] = await db.query('SELECT id FROM jugadores WHERE dni = ?', [dni]);
+    if (existingPlayer.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Ya existe un jugador registrado con ese DNI.' 
+      });
     }
-  } catch (err) {
-    console.error('Error al actualizar el jugador:', err);
-    res.status(500).json({ message: 'Error al actualizar el jugador', error: err.message });
+
+    const [result] = await db.query(
+      'INSERT INTO jugadores (nombre, apellido, edad, equipo_id, sexo, dni, fecha_ingreso, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [nombre, apellido, edad, equipo_id, sexo, dni, fecha_ingreso, estado]
+    );
+
+    res.status(201).json({ success: true, data: { id: result.insertId, ...req.body } });
+  } catch (error) {
+    console.error('Error al agregar jugador:', error);
+    res.status(500).json({ success: false, message: 'Error al agregar jugador.', error: error.message });
   }
 };
 
-const deleteJugador = async (req, res) => {
+// Obtener un jugador por su ID
+exports.getJugadorById = async (req, res) => {
   const { id } = req.params;
-  
-  try {
-    const jugadorEliminado = await Jugador.delete(id);
-    if (jugadorEliminado) {
-      res.status(200).json({ message: 'Jugador eliminado' });
-    } else {
-      res.status(404).json({ message: 'Jugador no encontrado' });
-    }
-  } catch (err) {
-    console.error('Error al eliminar el jugador:', err);
-    res.status(500).json({ message: 'Error al eliminar el jugador', error: err.message });
-  }
 
+  try {
+    const [jugador] = await db.query('SELECT * FROM jugadores WHERE id = ? AND estado = "activo"', [id]);
+
+    if (jugador.length === 0) {
+      return res.status(404).json({ success: false, message: 'Jugador no encontrado.' });
+    }
+
+    res.status(200).json({ success: true, data: jugador[0] });
+  } catch (error) {
+    console.error('Error al obtener el jugador por ID:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener el jugador.', error: error.message });
+  }
 };
 
-// Método para obtener jugadores con su equipo
-const getJugadoresConEquipo = async (req, res) => {
+// Actualizar un jugador por su ID
+exports.updateJugador = async (req, res) => {
+  const { id } = req.params;
+  const { 
+    nombre, 
+    apellido, 
+    edad, 
+    equipo_id, 
+    sexo, 
+    dni, 
+    fecha_ingreso,
+    estado 
+  } = req.body;
+
   try {
-    // Consulta SQL para obtener la información de los jugadores y su equipo
+    const [result] = await db.query(
+      'UPDATE jugadores SET nombre = ?, apellido = ?, edad = ?, equipo_id = ?, sexo = ?, dni = ?, fecha_ingreso = ?, estado = ? WHERE id = ?',
+      [nombre, apellido, edad, equipo_id, sexo, dni, fecha_ingreso, estado, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Jugador no encontrado.' });
+    }
+
+    res.status(200).json({ success: true, message: 'Jugador actualizado correctamente.' });
+  } catch (error) {
+    console.error('Error al actualizar el jugador:', error);
+    res.status(500).json({ success: false, message: 'Error al actualizar el jugador.', error: error.message });
+  }
+};
+
+// Eliminar un jugador por su ID (soft delete)
+exports.deleteJugador = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [result] = await db.query(
+      'UPDATE jugadores SET estado = "inactivo" WHERE id = ?',
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Jugador no encontrado.' });
+    }
+
+    res.status(200).json({ success: true, message: 'Jugador eliminado correctamente.' });
+  } catch (error) {
+    console.error('Error al eliminar el jugador:', error);
+    res.status(500).json({ success: false, message: 'Error al eliminar el jugador.', error: error.message });
+  }
+};
+
+// Obtener jugadores con información de su equipo
+exports.getJugadoresConEquipo = async (req, res) => {
+  try {
+    const [jugadores] = await db.query(`
+      SELECT j.*, e.nombre AS equipo_nombre
+      FROM jugadores j
+      LEFT JOIN equipos e ON j.equipo_id = e.id
+      WHERE j.estado = "activo"
+    `);
+
+    res.status(200).json({ success: true, data: jugadores });
+  } catch (error) {
+    console.error('Error al obtener jugadores con equipo:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener jugadores.', error: error.message });
+  }
+};
+
+// jugadorController.js
+exports.obtenerEquipoPorCapitan = async (req, res) => {
+  try {
+    const capitanId = req.user.id;
+
     const query = `
       SELECT 
-          j.nombre AS nombre_jugador,
-          j.edad,
-          j.posicion,
-          j.numero_camiseta,
-          e.nombre AS nombre_equipo
-      FROM jugadores j
-      JOIN equipos e ON j.equipo_id = e.id;
+        e.*,
+        c.nombre as categoria_nombre,
+        d.nombre as disciplina_nombre
+      FROM equipos e
+      LEFT JOIN categorias c ON e.categoria_id = c.id
+      LEFT JOIN disciplina_categorias dc ON c.id = dc.categoria_id
+      LEFT JOIN disciplinas d ON dc.disciplina_id = d.id
+      WHERE e.capitan_id = ?
     `;
-    
-    const [rows] = await db.query(query);  // Ejecutar la consulta
-    res.status(200).json(rows);  // Devolver los resultados como JSON
-  } catch (err) {
-    console.error('Error al obtener los jugadores con equipo:', err);
-    res.status(500).json({ message: 'Error al obtener los jugadores con equipo', error: err.message });
-  }
-}
 
-module.exports = {
-  createJugador,
-  getAllJugadores,
-  getJugadorById,
-  updateJugador,
-  deleteJugador,
-  getJugadoresConEquipo
-  
+    if (!db) {
+      console.error('No hay conexión a la base de datos');
+      return res.status(500).json({
+        success: false,
+        message: 'Error de conexión a la base de datos'
+      });
+    }
+
+    try {
+      const [equipo] = await db.query(query, [capitanId]);
+
+      if (!equipo || equipo.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'No se encontró equipo para este capitán'
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: equipo[0]
+      });
+
+    } catch (dbError) {
+      console.error('Error en la consulta SQL:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Error en la consulta a la base de datos',
+        error: dbError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('Error general:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error al obtener información del equipo',
+      error: error.message
+    });
+  }
 };

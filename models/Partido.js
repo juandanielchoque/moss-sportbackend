@@ -67,14 +67,30 @@ const Partido = {
 },
 
 
-  delete: async (id) => {
-    try {
-      const [result] = await db.query('DELETE FROM partidos WHERE id = ?', [id]);
-      return result.affectedRows > 0;  // Retorna true si se eliminó el partido
-    } catch (err) {
-      throw new Error('Error al eliminar el partido: ' + err.message);
-    }
+  // Función para eliminar un partido
+delete: async (id) => {
+  try {
+    const [result] = await db.query('DELETE FROM partidos WHERE id = ?', [id]);
+    return result.affectedRows > 0;  // Retorna true si se eliminó el partido
+  } catch (err) {
+    // Aquí se puede mejorar el manejo del error, añadiendo más detalles si es necesario
+    throw new Error('Error al eliminar el partido: ' + err.message);
   }
-};
+},
+
+// Función para obtener partidos por equipo
+getByEquipo: async (equipoId) => {
+  try {
+    const [partidos] = await pool.query(
+      `SELECT * FROM partidos 
+       WHERE equipo_local_id = ? OR equipo_visitante_id = ?
+       ORDER BY fecha_hora DESC`,
+      [equipoId, equipoId]
+    );
+    return partidos; // Retorna los partidos relacionados con el equipo
+  } catch (error) {
+    throw error;  // Relanzamos el error para que sea manejado más arriba si es necesario
+  }
+}};
 
 module.exports = Partido;
